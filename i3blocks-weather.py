@@ -18,8 +18,18 @@ def get_options():
                       action='store', help='Dark Sky API key')
     parser.add_option('-a', '--address', dest='address',
                       action='store', help='Your address')
+    parser.add_option('-t', '--temperature', dest='temperature',
+                      action='store_true', default=True)
+    parser.add_option('-g', '--general', dest='general',
+                      action='store_true', default=True)
+    parser.add_option('-w', '--wind', dest='wind',
+                      action='store_true', default=False)
+    parser.add_option('--humidity', dest='humidity',
+                      action='store_true', default=False)
     parser.add_option('-r', '--round', dest='round',
                       action='store', help='Number of digits in temperature after point, default is 0')
+    parser.add_option('--wind_round', dest='wind_round',
+                      action='store', help='Number of digits in wind speed after point, default is 0')
 
     (options, args) = parser.parse_args()
 
@@ -66,15 +76,6 @@ def get_addr_location(address):
     return (location.latitude, location.longitude, address)
 
 def round_temp(options, temp):
-#    '''Convert temperature between units'''
-#
-#    # Dark Sky output is in Farenheit.
-#    if options.celsius:
-#        temp = round((temp - 32) * 5/9)
-#    elif options.farenheit:
-#        temp = round(temp)
-#    else:
-#        raise RuntimeError('A degree unit must be specified')
     if not options.round:
         temp = round(temp)
     else:
@@ -82,17 +83,19 @@ def round_temp(options, temp):
         temp = round(temp, p)
     return temp
 
-def get_current_forecast(options, forecast):
-    '''Get the forecast from the Dark Sky API'''
-
-    currently = forecast.currently()
-    temp = round_temp(options, currently.temperature)
-    return (temp, currently.icon)
+def round_wind(options, wind_speed):
+    if not options.wind_round:
+        wind_speed = round(wind_speed)
+    else:
+        p = int(options.wind_round)
+        wind_speed = round(wind_speed, p)
+    return wind_speed
 
 def notify_forecast(location, daily_summary, hourly_summary):
     '''Send notification with detailed forecast'''
-
+    
     import subprocess
+    
     title = u"Weather - {}".format(location)
     message = u"Hourly Summary:\n{0}\n\n".format(hourly_summary)
     message += u"Daily Summary:\n{0}".format(daily_summary)
@@ -141,6 +144,18 @@ def get_icon_hex(options, icon_str):
         icon_hex = 'f07b' # N/A
     return (degrees_hex, icon_hex)
 
+def generate_weather_status_line(options):
+    icon = "&#x{0};"
+    temp = "{4}&#x{1};"
+    humd = "{5}&#x{2};"
+    wind = "{6}{3};"
+    status_line = []
+    if options.humidity:    status_line.append(humd)
+    if options.general:     status_line.append(icon)
+    if options.temperature: status_line.append(temp)
+    if options.wind:        status_line.append(wind)
+    return "<span font='Weather Icons'>" + ' '.join(status_line) +"</span>" 
+
 def main ():
     # Parse command line arguments
     options = get_options()
@@ -153,20 +168,32 @@ def main ():
 
     # Load the forecast from Dark Sky (aka forecastio)
     forecast = forecastio.load_forecast(options.api_key, lat, lon, units=options.units)
-    (temp, icon_str) = get_current_forecast(options, forecast)
-
+    forecast_data = forecast.currently().d.copy()
+    
     # If the weather icon is pressed, this environment variable will be set.
     buttonPressed = os.environ.get('BLOCK_BUTTON', None)
     
     # Send a notification with a more detailed forecast
     if buttonPressed:
         notify_forecast(location, forecast.daily().summary, forecast.hourly().summary)
+    
+    # Weather variables
+    temp = round_temp(options, forecast_data['temperature'])
+    humidity = round(100*forecast_data['humidity'])
+    wind_speed = round_wind(options, forecast_data['windSpeed'])
+    wind_degree = forecast_data['windBearing']
+    #bscale = beafourt(wind_speed, options.units)
 
     # Translate icon & unit information into hex codes
-    (degrees_hex, icon_hex) = get_icon_hex(options, icon_str)
+    (degrees_hex, icon_hex) = get_icon_hex(options, forecast_data['icon'])
+    humidity_hex = 'f07a'
+    wind_degree_hex = 'f0b1'
+    #bscale_hex = get_beafourt_icon_hex(bscale)
 
     # i3blocks uses pango to render the following output into the desired icons
-    print("<span font='Weather Icons'>&#x{0}; {1}&#x{2};</span>".format(icon_hex, temp, degrees_hex))
+    status_line = generate_weather_status_line(options)
+    print(status_line.format(icon_hex, degrees_hex, humidity_hex, "m/s",
+                                       temp,        humidity,     wind_speed))
 
 if __name__ == "__main__":
     main()
