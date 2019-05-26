@@ -148,13 +148,13 @@ def generate_weather_status_line(options):
     icon = "&#x{0};"
     temp = "{4}&#x{1};"
     humd = "{5}&#x{2};"
-    wind = "{6}{3};"
+    wind = "{6}{3}"
     status_line = []
     if options.humidity:    status_line.append(humd)
     if options.general:     status_line.append(icon)
     if options.temperature: status_line.append(temp)
     if options.wind:        status_line.append(wind)
-    return "<span font='Weather Icons'>" + ' '.join(status_line) +"</span>" 
+    return "<span font='Weather Icons'>" + '  '.join(status_line) +"</span>" 
 
 def main ():
     # Parse command line arguments
